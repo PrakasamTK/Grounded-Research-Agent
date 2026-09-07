@@ -5,9 +5,9 @@ descriptive User-Agent on all requests (otherwise returns 403).
 """
 import re
 import requests
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
-OPENSEARCH_URL = "https://en.wikipedia.org/w/api.php"
+API_URL = "https://en.wikipedia.org/w/api.php"
 SUMMARY_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
 
 HEADERS = {
@@ -23,6 +23,10 @@ _BOILERPLATE_PATTERNS = [
     r"^how does\s+",
 ]
 
+# Trailing qualifier clause, e.g. "CI/CD in cloud computing" -> "CI/CD".
+# Tried as a fallback when the full phrase doesn't match an article title.
+_TRAILING_QUALIFIER = re.compile(r"\s+(in|for|of|on|within)\s+.+$", re.IGNORECASE)
+
 
 def _extract_topic(question: str) -> str:
     q = question.strip().rstrip("?").strip()
@@ -37,6 +41,52 @@ def _extract_topic(question: str) -> str:
     return q.strip() or question.strip()
 
 
+def _opensearch_title(query: str) -> Optional[str]:
+    """Exact/prefix title match — high precision. Returns a title or None."""
+    resp = requests.get(
+        API_URL,
+        params={"action": "opensearch", "search": query, "limit": 1, "format": "json"},
+        headers=HEADERS,
+        timeout=10,
+    )
+    resp.raise_for_status()
+    results = resp.json()
+    titles = results[1] if len(results) > 1 else []
+    return titles[0] if titles else None
+
+
+def _fulltext_search_title(query: str) -> Optional[str]:
+    """Relevance-ranked full-text search — better recall, lower precision.
+    Used only as a last resort; the LLM synthesis step independently checks
+    whether the returned content actually supports the question before
+    answering, so a loosely-related fallback article still can't produce a
+    fabricated claim — worst case it triggers the honest refusal instead.
+    """
+    resp = requests.get(
+        API_URL,
+        params={"action": "query", "list": "search", "srsearch": query, "srlimit": 1, "format": "json"},
+        headers=HEADERS,
+        timeout=10,
+    )
+    resp.raise_for_status()
+    hits = resp.json().get("query", {}).get("search", [])
+    return hits[0]["title"] if hits else None
+
+
+def _resolve_title(topic: str) -> Optional[str]:
+    title = _opensearch_title(topic)
+    if title:
+        return title
+
+    stripped = _TRAILING_QUALIFIER.sub("", topic).strip()
+    if stripped and stripped.lower() != topic.lower():
+        title = _opensearch_title(stripped)
+        if title:
+            return title
+
+    return _fulltext_search_title(topic)
+
+
 def get_wikipedia_summary(question: str) -> Dict[str, Any]:
     """Look up a Wikipedia article relevant to `question` and return its
     summary. Returns a structured dict with an exact source_url, or
@@ -44,18 +94,9 @@ def get_wikipedia_summary(question: str) -> Dict[str, Any]:
     """
     topic = _extract_topic(question)
     try:
-        search_resp = requests.get(
-            OPENSEARCH_URL,
-            params={"action": "opensearch", "search": topic, "limit": 1, "format": "json"},
-            headers=HEADERS,
-            timeout=10,
-        )
-        search_resp.raise_for_status()
-        results = search_resp.json()
-        titles = results[1] if len(results) > 1 else []
-        if not titles:
+        title = _resolve_title(topic)
+        if not title:
             return {"error": f"No Wikipedia article found for '{topic}'."}
-        title = titles[0]
     except Exception as e:
         return {"error": f"Wikipedia search failed: {e}"}
 

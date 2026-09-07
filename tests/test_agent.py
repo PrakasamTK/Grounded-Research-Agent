@@ -13,6 +13,7 @@ from agent.router import classify_question, detect_injection
 from agent.guardrails import compute_grounding_status, check_input_injection
 from utils.citations import build_citations
 from utils.safety import is_unsafe
+from tools.wikipedia import _extract_topic, _TRAILING_QUALIFIER
 
 
 def test_weather_routes_to_weather():
@@ -79,6 +80,21 @@ def test_citations_label_geo_results_correctly():
     assert len(citations) == 1
     assert "countries.dev" in citations[0]["label"]
     assert "India" in citations[0]["label"]
+
+
+def test_wikipedia_topic_extraction_strips_boilerplate():
+    assert _extract_topic("What is CI/CD?") == "CI/CD"
+    assert _extract_topic("Who is Alan Turing?") == "Alan Turing"
+
+
+def test_wikipedia_trailing_qualifier_strippable():
+    # This is the exact fix for "What is CI/CD in cloud computing?" failing
+    # to match an article: opensearch is title-prefix only, so the tool
+    # retries with trailing "in X"/"for X" clauses stripped.
+    topic = _extract_topic("What is CI/CD in cloud computing?")
+    assert topic == "CI/CD in cloud computing"
+    stripped = _TRAILING_QUALIFIER.sub("", topic).strip()
+    assert stripped == "CI/CD"
 
 
 def test_citations_label_wikipedia_results_correctly():
