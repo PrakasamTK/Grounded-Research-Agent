@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+.streamlit/secrets.toml
+.pytest_cache/
+*.egg-info/
+.claude/
+streamlit.log
