@@ -1,7 +1,7 @@
 """Streamlit UI for the Grounded Research Agent."""
 import os
 import html
-import time
+import re
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -219,6 +219,13 @@ def status_row(label: str, value: str, css_class: str) -> str:
     )
 
 
+def _clean_answer_text(answer: str) -> str:
+    """Strip a trailing 'Sources: ...' block the LLM appends — the Sources
+    panel already shows these as proper links, so keep the answer itself
+    free of raw duplicate URLs."""
+    return re.split(r"\n\s*Sources:\s*\n?", answer, maxsplit=1)[0].strip()
+
+
 def render_dashboard(question: str, result: dict) -> None:
     route = result.get("route", "UNKNOWN")
     route_label, route_class = ROUTE_META.get(route, (route, "grh-gray"))
@@ -235,41 +242,36 @@ def render_dashboard(question: str, result: dict) -> None:
                 f'<div style="font-size:1.15rem;font-weight:600;color:#0f2540;margin-bottom:1.2rem;">{html.escape(question)}</div>',
                 unsafe_allow_html=True)
 
-    left, right = st.columns([1, 2], gap="medium")
+    answer_html = html.escape(_clean_answer_text(result.get("answer", "No answer generated."))).replace("\n", "<br>")
+    st.markdown(f'<div class="grh-panel"><div class="grh-panel-title">Answer</div>'
+                f'<div class="grh-answer">{answer_html}</div></div>', unsafe_allow_html=True)
 
-    with left:
+    if sources:
+        src_html = "".join(
+            f'<div class="grh-source"><span class="grh-source-idx">[{i}]</span>'
+            f'<a href="{html.escape(s["url"])}" target="_blank">{html.escape(s["label"])}</a></div>'
+            for i, s in enumerate(sources, 1)
+        )
+        st.markdown(f'<div class="grh-panel"><div class="grh-panel-title">Sources</div>{src_html}</div>', unsafe_allow_html=True)
+
+    with st.expander("Routing & execution details"):
         rows = (
             status_row("Route", route_label, route_class)
             + status_row("Grounding", grounding_label, grounding_class)
             + status_row("Guardrail", guardrail_label, guardrail_class)
             + status_row("Tools used", ", ".join(tools_used), "grh-gray")
         )
-        st.markdown(f'<div class="grh-panel"><div class="grh-panel-title">Status</div>{rows}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="grh-panel-title" style="margin-top:0;">Status</div>{rows}', unsafe_allow_html=True)
 
         trace_html = "".join(
             f'<div class="grh-trace-item"><span class="grh-trace-idx">{i}</span><span>{html.escape(step)}</span></div>'
             for i, step in enumerate(trace, 1)
         ) or '<div style="color:#94a3b8;font-size:0.85rem;">No steps recorded.</div>'
-        st.markdown(f'<div class="grh-panel"><div class="grh-panel-title">Execution Trace</div>{trace_html}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="grh-panel-title">Execution Trace</div>{trace_html}', unsafe_allow_html=True)
 
         if errors:
             err_html = "".join(f'<div class="grh-row" style="color:#b91c1c;">{html.escape(e)}</div>' for e in errors)
-            st.markdown(f'<div class="grh-panel"><div class="grh-panel-title">Errors</div>{err_html}</div>', unsafe_allow_html=True)
-
-    with right:
-        answer_html = html.escape(result.get("answer", "No answer generated.")).replace("\n", "<br>")
-        st.markdown(f'<div class="grh-panel"><div class="grh-panel-title">Answer</div>'
-                    f'<div class="grh-answer">{answer_html}</div></div>', unsafe_allow_html=True)
-
-        if sources:
-            src_html = "".join(
-                f'<div class="grh-source"><span class="grh-source-idx">[{i}]</span>'
-                f'<a href="{html.escape(s["url"])}" target="_blank">{html.escape(s["label"])}</a></div>'
-                for i, s in enumerate(sources, 1)
-            )
-        else:
-            src_html = '<div style="color:#94a3b8;font-size:0.85rem;">No sources retrieved.</div>'
-        st.markdown(f'<div class="grh-panel"><div class="grh-panel-title">Sources</div>{src_html}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="grh-panel-title">Errors</div>{err_html}', unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
