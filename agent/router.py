@@ -29,6 +29,18 @@ OFF_TOPIC_SIGNS = [
     "stock price", "medical advice", "diagnose", "legal advice",
 ]
 
+# Definitional/general-knowledge questions ("what is X", "who is X", "define
+# X") — checked only after weather/geo/social/off-topic, so e.g. "what is
+# the weather in Chennai" is still caught by WEATHER_KEYWORDS first.
+GENERAL_KNOWLEDGE_PATTERNS = [
+    r"^what('s| is| are)\s+",
+    r"^define\s+",
+    r"^explain\s+",
+    r"^who (is|was)\s+",
+    r"^tell me about\s+",
+    r"^how does\s+",
+]
+
 INJECTION_PATTERNS = [
     r"ignore (all )?previous instructions",
     r"system prompt",
@@ -47,7 +59,7 @@ def detect_injection(text: str) -> bool:
 
 
 def classify_question(question: str) -> str:
-    """Return one of WEATHER, GEO, SOCIAL, BOTH, OFF_TOPIC, UNKNOWN."""
+    """Return one of WEATHER, GEO, SOCIAL, BOTH, GENERAL, OFF_TOPIC, UNKNOWN."""
     q = question.lower()
 
     # Guardrail: direct prompt-injection / jailbreak attempts on the agent itself
@@ -69,6 +81,9 @@ def classify_question(question: str) -> str:
         return "SOCIAL"
     if has_off_topic_sign:
         return "OFF_TOPIC"
+
+    if any(re.match(p, q) for p in GENERAL_KNOWLEDGE_PATTERNS):
+        return "GENERAL"
 
     # Nothing matched confidently
     return "UNKNOWN"

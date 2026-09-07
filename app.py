@@ -135,6 +135,7 @@ st.markdown(
 ROUTE_META = {
     "WEATHER": ("REST API · Open-Meteo", "grh-green"),
     "GEO": ("REST API · countries.dev", "grh-green"),
+    "GENERAL": ("Wikipedia", "grh-blue"),
     "SOCIAL": ("Hacker News", "grh-orange"),
     "BOTH": ("Hacker News + REST API", "grh-blue"),
     "OFF_TOPIC": ("Off-topic (declined)", "grh-gray"),
@@ -154,6 +155,7 @@ GUARDRAIL_META = {
 
 EXAMPLES = [
     "What is the weather in Chennai right now?",
+    "What is CI/CD?",
     "What do people think about electric vehicles?",
     "What are common complaints about a product?",
     "Tell me something you cannot ground from your available sources.",
@@ -225,7 +227,7 @@ if "pending_question" not in st.session_state:
 # ---------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### 🔎 Grounded Research Agent")
-    st.caption("LangGraph · Groq (Qwen3, open-weights) · Hacker News · Open-Meteo · countries.dev")
+    st.caption("LangGraph · Groq (Qwen3, open-weights) · Hacker News · Open-Meteo · countries.dev · Wikipedia")
 
     st.markdown(
         f'<div class="grh-sidebar-stat">💬 Questions this session<br>'
@@ -246,12 +248,12 @@ with st.sidebar:
     st.markdown("---")
     with st.expander("ℹ️ About this agent"):
         st.markdown(
-            "Classifies your question, retrieves live data from Hacker News "
-            "and/or Open-Meteo / countries.dev, validates grounding, applies "
-            "prompt-injection and safety guardrails, and only then synthesizes "
-            "an answer using an open-weights model via Groq. It refuses to "
-            "answer when it cannot find supporting sources. See `README.md` "
-            "for full architecture details."
+            "Classifies your question, retrieves live data from Hacker News, "
+            "Open-Meteo, countries.dev, and/or Wikipedia, validates grounding, "
+            "applies prompt-injection and safety guardrails, and only then "
+            "synthesizes an answer using an open-weights model via Groq. It "
+            "refuses to answer when it cannot find supporting sources. See "
+            "`README.md` for full architecture details."
         )
 
 # ---------------------------------------------------------------------------
@@ -261,7 +263,7 @@ st.markdown(
     """
     <div class="grh-hero">
         <h1>Grounded Research Agent</h1>
-        <p>Live answers grounded in Hacker News discussions and public APIs — never fabricated.</p>
+        <p>Live answers grounded in Hacker News discussions, Wikipedia, and public APIs — never fabricated.</p>
     </div>
     """,
     unsafe_allow_html=True,

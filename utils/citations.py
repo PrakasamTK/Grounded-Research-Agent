@@ -11,6 +11,8 @@ def _api_citation_label(api_results: Dict[str, Any]) -> str:
         return f"Open-Meteo ({api_results.get('city', 'weather data')})"
     if "country" in api_results:
         return f"countries.dev ({api_results.get('country', 'country data')})"
+    if "topic" in api_results:
+        return f"Wikipedia ({api_results.get('topic', 'article')})"
     return "Public API"
 
 

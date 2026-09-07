@@ -7,6 +7,7 @@ START -> classify -> (route)
   SOCIAL    -> hackernews_search -> validate -> synthesize
   WEATHER   -> weather_lookup -> validate -> synthesize
   GEO       -> geo_lookup -> validate -> synthesize
+  GENERAL   -> wikipedia_lookup -> validate -> synthesize
   BOTH      -> hackernews_search -> weather_lookup -> validate -> synthesize
   UNKNOWN   -> validate (no sources) -> synthesize (refusal)
 """
@@ -26,6 +27,7 @@ from agent.prompts import SYSTEM_PROMPT, build_user_prompt, DECLINE_OFF_TOPIC, D
 from tools.hackernews import search_hackernews
 from tools.weather import get_weather
 from tools.geo import get_country_info
+from tools.wikipedia import get_wikipedia_summary
 from utils.citations import build_citations
 
 
@@ -104,6 +106,20 @@ def geo_node(state: AgentState) -> AgentState:
     return state
 
 
+def wikipedia_node(state: AgentState) -> AgentState:
+    question = state["question"]
+    state["trace"].append("Calling Wikipedia summary tool")
+    result = get_wikipedia_summary(question)
+    if result.get("error"):
+        state["errors"].append(result["error"])
+        state["trace"].append(f"Wikipedia error: {result['error']}")
+    else:
+        state["api_results"] = result
+        state["tools_used"].append("Wikipedia (REST API)")
+        state["trace"].append(f"Wikipedia returned a summary for '{result.get('topic')}'")
+    return state
+
+
 def _extract_city(question: str) -> str:
     import re
     match = re.search(r"in ([A-Za-z\s]+?)(?:\?|$| right now| today| now)", question, re.IGNORECASE)
@@ -179,6 +195,8 @@ def route_after_classify(state: AgentState) -> str:
         return "weather"
     if route == "GEO":
         return "geo"
+    if route == "GENERAL":
+        return "wikipedia"
     if route == "BOTH":
         return "hackernews_then_weather"
     return "validate"  # UNKNOWN -> straight to validation -> will be INSUFFICIENT
@@ -191,6 +209,7 @@ def build_graph():
     graph.add_node("hackernews", hackernews_node)
     graph.add_node("weather", weather_node)
     graph.add_node("geo", geo_node)
+    graph.add_node("wikipedia", wikipedia_node)
     graph.add_node("decline", decline_node)
     graph.add_node("validate", validate_node)
     graph.add_node("synthesize", synthesize_node)
@@ -205,6 +224,7 @@ def build_graph():
             "hackernews": "hackernews",
             "weather": "weather",
             "geo": "geo",
+            "wikipedia": "wikipedia",
             "hackernews_then_weather": "hackernews",
             "validate": "validate",
         },
@@ -217,6 +237,7 @@ def build_graph():
     graph.add_conditional_edges("hackernews", after_hackernews, {"weather": "weather", "validate": "validate"})
     graph.add_edge("weather", "validate")
     graph.add_edge("geo", "validate")
+    graph.add_edge("wikipedia", "validate")
     graph.add_edge("validate", "synthesize")
     graph.add_edge("synthesize", END)
     graph.add_edge("decline", END)

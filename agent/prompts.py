@@ -45,8 +45,8 @@ def build_user_prompt(question: str, social_results, api_results) -> str:
 
 DECLINE_OFF_TOPIC = (
     "I can't answer that reliably because it is outside the supported research scope. "
-    "I can help with: weather, country/geography facts, or social/product opinions "
-    "sourced from Hacker News."
+    "I can help with: weather, country/geography facts, general-knowledge/definitional "
+    "questions (via Wikipedia), or social/product opinions sourced from Hacker News."
 )
 
 DECLINE_INSUFFICIENT = "I don't have sufficient grounding to answer that."

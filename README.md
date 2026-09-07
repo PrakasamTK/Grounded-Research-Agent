@@ -25,7 +25,7 @@ cite only what was retrieved in the current run.
 ## 3. Architecture
 
 ```
-Streamlit UI  -->  LangGraph state machine  -->  Tools (Hacker News / Open-Meteo / countries.dev)
+Streamlit UI  -->  LangGraph state machine  -->  Tools (Hacker News / Open-Meteo / countries.dev / Wikipedia)
                          |                              |
                          v                              v
                   Guardrails + Grounding          Groq (Qwen3, open-weights)
@@ -46,6 +46,7 @@ agent/guardrails.py      Injection sanitization, unsafe-content filtering, groun
 tools/weather.py         Open-Meteo geocoding + current weather (real HTTP)
 tools/geo.py             countries.dev API (population/capital/etc.)
 tools/hackernews.py      Algolia HN Search API (social/opinion discussions)
+tools/wikipedia.py       Wikipedia REST API (general-knowledge/definitional questions)
 utils/citations.py       Builds citation list strictly from actual tool outputs
 utils/safety.py          Unsafe-content pattern filter
 ```
@@ -63,6 +64,8 @@ classify -----> OFF_TOPIC -----------------------> decline -----> END
   +-----------> WEATHER -> weather --------------> validate -> synthesize -> END
   |
   +-----------> GEO     -> geo ------------------> validate -> synthesize -> END
+  |
+  +-----------> GENERAL -> wikipedia ------------> validate -> synthesize -> END
   |
   +-----------> BOTH    -> hackernews -> weather -> validate -> synthesize -> END
   |
@@ -158,14 +161,40 @@ key, so it no longer met the "free public API" requirement — countries.dev
 was verified live and adopted as a drop-in, keyless replacement serving the
 same country-data shape.
 
-## 10. Routing Logic
+## 10. Wikipedia Integration (General Knowledge — Beyond the Original Scope)
+
+The original assignment scopes the agent to weather, geography, and social
+opinion. In practice, users naturally ask plain definitional questions
+("What is CI/CD?", "Who is Alan Turing?") that fall outside all three —
+and the honest behavior at that point was a hard refusal
+("I don't have sufficient grounding to answer that"), even though a real,
+citable source for those questions obviously exists.
+
+Rather than let the agent either hallucinate an answer or refuse a
+reasonable question forever, `tools/wikipedia.py` adds a fourth grounding
+source: the official **Wikipedia REST API** (`en.wikipedia.org/api/rest_v1`),
+free and keyless (Wikimedia does require a descriptive `User-Agent` header
+on requests, or it 403s — no API key). It uses the `opensearch` endpoint to
+resolve a question like "What is CI/CD?" to the best-matching article title,
+then fetches that article's summary extract and canonical URL as the
+citation source. If no article matches, it returns an error and the agent
+still gives the honest "insufficient grounding" refusal rather than
+guessing — e.g. "What is CI/CD in cloud?" (over-specific phrasing with no
+matching article) correctly refuses, while "What is CI/CD?" correctly
+grounds (verified live — see Example Transcript F).
+
+This is a deliberate scope expansion beyond the assignment brief, added on
+request, and documented here rather than silently changing the agent's
+advertised topic boundary.
+
+## 11. Routing Logic
 
 `agent/router.py` classifies with fast keyword heuristics (weather / geo /
 social / off-topic / mixed) — deterministic, free, and fast, which matters for
 a demo with tight latency budgets. Prompt-injection patterns in the question
 itself are detected at classification time and routed straight to a decline.
 
-## 11. Grounding Strategy
+## 12. Grounding Strategy
 
 - Tools return real data or an explicit error — never mocked/fabricated content.
 - `validate` node computes grounding status purely from what tools returned.
@@ -178,7 +207,7 @@ itself are detected at classification time and routed straight to a decline.
   the model correctly said "I don't have sufficient grounding" rather than
   stretching a weak source into an answer.
 
-## 12. Prompt Injection Defense
+## 13. Prompt Injection Defense
 
 Two layers:
 1. **Input layer** (`agent/router.py::detect_injection`): the user's own
@@ -191,27 +220,31 @@ Two layers:
    instructs the LLM to treat all retrieved content as untrusted data, never
    as instructions to follow.
 
-## 13. Unsafe Content Handling
+## 14. Unsafe Content Handling
 
 `utils/safety.py` filters social-discussion results containing slurs,
 harassment, or other unsafe patterns before they ever reach the LLM prompt.
 If everything retrieved is filtered out, the agent falls back to
 "insufficient grounding" rather than surfacing unsafe content.
 
-## 14. Topic Scope
+## 15. Topic Scope
 
-Supported: weather, country/geography facts, social/product opinions (via
-Hacker News). Everything else — trivia, coding help, medical/legal/financial
-advice, historical events not on Hacker News/APIs — is explicitly declined.
+Supported: weather, country/geography facts, general-knowledge/definitional
+questions (via Wikipedia), and social/product opinions (via Hacker News).
+Everything else — coding help, medical/legal/financial advice, subjective
+"who won"/historical-trivia questions not backed by any of the four sources —
+is explicitly declined.
 
-## 15. Citation Strategy
+## 16. Citation Strategy
 
 `utils/citations.py` builds the citation list **only** from fields present in
-the actual tool-call return values (`source_url` from Open-Meteo/countries.dev,
-`url` from Hacker News results, correctly labeled by which API actually
-returned it). No citation is ever synthesized or guessed by the LLM.
+the actual tool-call return values (`source_url` from Open-Meteo/countries.dev/
+Wikipedia, `url` from Hacker News results, correctly labeled by which API
+actually returned it — detected from which fields are present, e.g. `city`
+means Open-Meteo, `country` means countries.dev, `topic` means Wikipedia). No
+citation is ever synthesized or guessed by the LLM.
 
-## 16. LangSmith Observability
+## 17. LangSmith Observability
 
 Set the following env vars (see `.env.example`) to enable tracing:
 
@@ -247,13 +280,13 @@ open the `grounded-research-agent` project, and select any run — you'll see
 the full node execution order, inputs/outputs per node, latency, and the LLM
 call with token usage.
 
-## 17. Environment Variables
+## 18. Environment Variables
 
 See [`.env.example`](.env.example). Copy it to `.env` and fill in real values;
 `.env` is git-ignored and never committed. Only `GROQ_API_KEY` is required —
 Hacker News needs no credentials at all.
 
-## 18. Local Setup
+## 19. Local Setup
 
 ```bash
 cd grounded-research-agent
@@ -264,7 +297,7 @@ copy .env.example .env        # then fill in GROQ_API_KEY
 streamlit run app.py
 ```
 
-## 19. Deployment (Streamlit Community Cloud)
+## 20. Deployment (Streamlit Community Cloud)
 
 1. Push this folder to a GitHub repo (make sure `.env` is **not** committed —
    `.gitignore` already excludes it).
@@ -284,7 +317,7 @@ subscription as of this writing. That's incompatible with this assignment's
 free-tier-only requirement, so Streamlit Community Cloud — still genuinely
 free for a public app — was used instead.
 
-## 20. Known Limitations
+## 21. Known Limitations
 
 - Keyword-based routing is fast and cheap but not as robust as an LLM-based
   classifier for ambiguous phrasing.
@@ -293,10 +326,13 @@ free for a public app — was used instead.
   than Reddit would have been.
 - No persistent caching layer (only in-process Streamlit caching for repeated
   identical weather lookups within a session).
-- Country-name extraction in `tools/geo.py` and query-term extraction in
-  `tools/hackernews.py` are simple stop-word/regex heuristics, not full NER.
+- Country-name extraction in `tools/geo.py`, query-term extraction in
+  `tools/hackernews.py`, and topic extraction in `tools/wikipedia.py` are all
+  simple stop-word/regex heuristics, not full NER — an over-specific phrasing
+  (e.g. "CI/CD in cloud") can fail to match an article that a cleaner query
+  would find, correctly falling back to a refusal rather than a wrong guess.
 
-## 21. Future Improvements
+## 22. Future Improvements
 
 - LLM-based fallback classifier for UNKNOWN routes.
 - Persistent cross-session cache (Redis) for repeated queries.
@@ -381,6 +417,24 @@ it is flagged by `sanitize_social_results` and the synthesis prompt
 explicitly tells the LLM to treat that text as untrusted data, not as a
 command — demonstrated in
 `tests/test_agent.py::test_prompt_injection_detected`.
+
+### F. Wikipedia general-knowledge example (real run, added on request — beyond original scope)
+
+**Question:** "What is CI/CD?"
+
+- **Route:** 🔵 Wikipedia
+- **Tool:** Wikipedia REST API (opensearch → "CI/CD" article → summary extract)
+- **Grounding:** ✅ Grounded
+- **Answer (actual):** "CI/CD is a software development methodology that
+  combines the practices of continuous integration (CI) and continuous
+  delivery (CD), or less often, continuous deployment. These practices are
+  sometimes collectively referred to as continuous development or continuous
+  software development. Sources: https://en.wikipedia.org/wiki/CI%2FCD"
+- **Citations:** The exact Wikipedia article URL.
+- **Contrast:** the over-specific variant "What is CI/CD in cloud?" finds no
+  matching article and correctly returns the insufficient-grounding refusal
+  instead of guessing — demonstrated live, not just asserted (see
+  section 10 for the full explanation of why this source was added).
 
 ---
 
