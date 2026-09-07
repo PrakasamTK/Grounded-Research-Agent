@@ -5,9 +5,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Enable LangSmith tracing if configured (env vars read from .env)
-os.environ.setdefault("LANGCHAIN_TRACING_V2", os.environ.get("LANGCHAIN_TRACING_V2", "false"))
-os.environ.setdefault("LANGCHAIN_PROJECT", os.environ.get("LANGCHAIN_PROJECT", "grounded-research-agent"))
+# On Streamlit Community Cloud, secrets set via the dashboard land in
+# st.secrets. Bridge them into os.environ so the rest of the app (which
+# reads plain env vars, for portability outside Streamlit) sees them too.
+try:
+    for key, value in st.secrets.items():
+        os.environ.setdefault(key, str(value))
+except Exception:
+    pass  # no secrets.toml locally — expected, .env covers local dev
+
+os.environ.setdefault("LANGCHAIN_TRACING_V2", "false")
+os.environ.setdefault("LANGCHAIN_PROJECT", "grounded-research-agent")
 
 from agent.graph import run_agent  # noqa: E402
 
