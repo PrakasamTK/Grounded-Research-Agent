@@ -4,6 +4,7 @@ Graph:
 
 START -> classify -> (route)
   OFF_TOPIC -> decline
+  GREETING  -> greeting (friendly capability summary, no tools/LLM)
   SOCIAL    -> hackernews_search -> validate -> synthesize
   WEATHER   -> weather_lookup -> validate -> synthesize
   GEO       -> geo_lookup -> validate -> synthesize
@@ -23,7 +24,13 @@ from agent.guardrails import (
     sanitize_social_results,
     compute_grounding_status,
 )
-from agent.prompts import SYSTEM_PROMPT, build_user_prompt, DECLINE_OFF_TOPIC, DECLINE_INSUFFICIENT
+from agent.prompts import (
+    SYSTEM_PROMPT,
+    build_user_prompt,
+    DECLINE_OFF_TOPIC,
+    DECLINE_INSUFFICIENT,
+    FRIENDLY_GREETING,
+)
 from tools.hackernews import search_hackernews
 from tools.weather import get_weather
 from tools.geo import get_country_info
@@ -128,6 +135,14 @@ def _extract_city(question: str) -> str:
     return question
 
 
+def greeting_node(state: AgentState) -> AgentState:
+    state["answer"] = FRIENDLY_GREETING
+    state["grounding_status"] = "N/A"
+    state["sources"] = []
+    state["trace"].append("Greeting/small-talk detected -> friendly capability summary returned (no tools/LLM used)")
+    return state
+
+
 def decline_node(state: AgentState) -> AgentState:
     state["answer"] = DECLINE_OFF_TOPIC
     state["grounding_status"] = "INSUFFICIENT"
@@ -189,6 +204,8 @@ def route_after_classify(state: AgentState) -> str:
     route = state["route"]
     if route == "OFF_TOPIC":
         return "decline"
+    if route == "GREETING":
+        return "greeting"
     if route == "SOCIAL":
         return "hackernews"
     if route == "WEATHER":
@@ -210,6 +227,7 @@ def build_graph():
     graph.add_node("weather", weather_node)
     graph.add_node("geo", geo_node)
     graph.add_node("wikipedia", wikipedia_node)
+    graph.add_node("greeting", greeting_node)
     graph.add_node("decline", decline_node)
     graph.add_node("validate", validate_node)
     graph.add_node("synthesize", synthesize_node)
@@ -221,6 +239,7 @@ def build_graph():
         route_after_classify,
         {
             "decline": "decline",
+            "greeting": "greeting",
             "hackernews": "hackernews",
             "weather": "weather",
             "geo": "geo",
@@ -241,6 +260,7 @@ def build_graph():
     graph.add_edge("validate", "synthesize")
     graph.add_edge("synthesize", END)
     graph.add_edge("decline", END)
+    graph.add_edge("greeting", END)
 
     return graph.compile()
 

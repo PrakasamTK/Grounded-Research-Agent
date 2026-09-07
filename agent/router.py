@@ -41,6 +41,19 @@ GENERAL_KNOWLEDGE_PATTERNS = [
     r"^how does\s+",
 ]
 
+# Pure greetings/small-talk — matched only when the ENTIRE (normalized)
+# message is short and greeting-shaped, so "hi, what's the weather" still
+# routes normally instead of being swallowed here.
+GREETING_PATTERNS = [
+    r"^h+[ei]+y*$",              # hi, hii, hey, heyy, heey...
+    r"^hello+!*$",
+    r"^good (morning|afternoon|evening|night)!?$",
+    r"^(how are you|how's it going|what's up|whats up|sup|yo)\??$",
+    r"^(thanks|thank you|thx|ty)!?$",
+    r"^(bye|goodbye|see ya|see you)!?$",
+    r"^(ok|okay|cool|nice|great)!?$",
+]
+
 INJECTION_PATTERNS = [
     r"ignore (all )?previous instructions",
     r"system prompt",
@@ -58,13 +71,24 @@ def detect_injection(text: str) -> bool:
     return any(re.search(p, lowered) for p in INJECTION_PATTERNS)
 
 
+def detect_greeting(text: str) -> bool:
+    """True only when the whole message is a short greeting/small-talk
+    phrase, e.g. 'hi', 'thanks!', 'good morning' — not when a greeting is
+    just the opening of a real question ('hi, what's the weather?')."""
+    normalized = text.strip().lower().rstrip("!.,;:? ")
+    return any(re.match(p, normalized) for p in GREETING_PATTERNS)
+
+
 def classify_question(question: str) -> str:
-    """Return one of WEATHER, GEO, SOCIAL, BOTH, GENERAL, OFF_TOPIC, UNKNOWN."""
+    """Return one of WEATHER, GEO, SOCIAL, BOTH, GENERAL, GREETING, OFF_TOPIC, UNKNOWN."""
     q = question.lower()
 
     # Guardrail: direct prompt-injection / jailbreak attempts on the agent itself
     if detect_injection(q):
         return "OFF_TOPIC"
+
+    if detect_greeting(question):
+        return "GREETING"
 
     has_weather = any(k in q for k in WEATHER_KEYWORDS)
     has_geo = any(k in q for k in GEO_KEYWORDS)

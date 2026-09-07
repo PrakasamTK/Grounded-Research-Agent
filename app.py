@@ -138,6 +138,7 @@ ROUTE_META = {
     "GENERAL": ("Wikipedia", "grh-blue"),
     "SOCIAL": ("Hacker News", "grh-orange"),
     "BOTH": ("Hacker News + REST API", "grh-blue"),
+    "GREETING": ("Greeting / small talk", "grh-blue"),
     "OFF_TOPIC": ("Off-topic (declined)", "grh-gray"),
     "UNKNOWN": ("Unknown / no grounding", "grh-gray"),
 }
@@ -145,6 +146,7 @@ GROUNDING_META = {
     "GROUNDED": ("Grounded", "grh-green"),
     "PARTIAL": ("Limited sources", "grh-amber"),
     "INSUFFICIENT": ("Insufficient grounding", "grh-red"),
+    "N/A": ("Not a research question", "grh-blue"),
 }
 GUARDRAIL_META = {
     "OK": ("OK", "grh-green"),

@@ -9,7 +9,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from agent.router import classify_question, detect_injection
+from agent.router import classify_question, detect_injection, detect_greeting
 from agent.guardrails import compute_grounding_status, check_input_injection
 from utils.citations import build_citations
 from utils.safety import is_unsafe
@@ -31,6 +31,20 @@ def test_geo_routes_to_geo():
 def test_unsupported_question_is_unknown_or_offtopic():
     route = classify_question("Who won a random historical event in 1743?")
     assert route in ("UNKNOWN", "OFF_TOPIC")
+
+
+def test_greeting_routes_to_greeting():
+    assert classify_question("Hi") == "GREETING"
+    assert classify_question("hello!") == "GREETING"
+    assert classify_question("thanks") == "GREETING"
+    assert classify_question("good morning") == "GREETING"
+
+
+def test_greeting_does_not_swallow_real_questions():
+    # A greeting-shaped opener attached to a real question must still route
+    # normally, not get short-circuited as pure small talk.
+    assert detect_greeting("hi, what's the weather in Chennai?") is False
+    assert classify_question("hi, what's the weather in Chennai?") == "WEATHER"
 
 
 def test_general_knowledge_routes_to_general():

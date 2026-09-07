@@ -50,3 +50,13 @@ DECLINE_OFF_TOPIC = (
 )
 
 DECLINE_INSUFFICIENT = "I don't have sufficient grounding to answer that."
+
+FRIENDLY_GREETING = (
+    "Hi! I'm a grounded research agent — I only answer using real, retrieved "
+    "sources, so ask me something in one of these areas:\n\n"
+    "- **Weather** — \"What is the weather in Chennai right now?\"\n"
+    "- **Geography** — \"What is the population of Japan?\"\n"
+    "- **General knowledge** — \"What is CI/CD?\"\n"
+    "- **Social/product opinions** — \"What do people think about electric vehicles?\"\n\n"
+    "I'll refuse rather than guess if I can't find a real source for it."
+)
