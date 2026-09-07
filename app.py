@@ -59,20 +59,6 @@ st.markdown(
         font-size: 0.85rem;
         margin: 0.3rem 0 0.7rem 0;
     }
-    .grh-stack {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.4rem;
-    }
-    .grh-stack-pill {
-        background: rgba(255,255,255,0.08);
-        border: 1px solid rgba(255,255,255,0.16);
-        color: #cbd9ef;
-        font-size: 0.72rem;
-        font-weight: 600;
-        padding: 0.18rem 0.6rem;
-        border-radius: 999px;
-    }
 
     .grh-panel {
         background: #ffffff;
@@ -266,8 +252,6 @@ def logo_svg(size: int = 46, gradient_id: str = "grh-logo-grad") -> str:
 
 LOGO_SVG = logo_svg(46, "grh-logo-grad-top")
 
-STACK_PILLS = ["LangGraph", "Groq · Qwen3", "Hacker News", "Open-Meteo", "countries.dev", "Wikipedia"]
-
 
 STATUS_ICONS = {"grh-green": "✓", "grh-amber": "!", "grh-red": "✕", "grh-blue": "i", "grh-gray": "•"}
 
@@ -390,13 +374,10 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 # Top bar
 # ---------------------------------------------------------------------------
-stack_html = "".join(f'<span class="grh-stack-pill">{html.escape(p)}</span>' for p in STACK_PILLS)
-
 st.markdown(
     f'<div class="grh-topbar">{LOGO_SVG}<div>'
     f'<h1>Grounded Research Agent</h1>'
     f'<p>Live answers grounded in Hacker News discussions, Wikipedia, and public APIs — never fabricated.</p>'
-    f'<div class="grh-stack">{stack_html}</div>'
     f'</div></div>',
     unsafe_allow_html=True,
 )
