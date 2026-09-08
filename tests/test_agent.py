@@ -13,7 +13,7 @@ from agent.router import classify_question, detect_injection, detect_greeting
 from agent.guardrails import compute_grounding_status, check_input_injection
 from utils.citations import build_citations
 from utils.safety import is_unsafe
-from tools.wikipedia import _extract_topic, _TRAILING_QUALIFIER
+from tools.wikipedia import _extract_topic, _TRAILING_QUALIFIER, _clean_wikitext_value
 
 
 def test_weather_routes_to_weather():
@@ -109,6 +109,15 @@ def test_wikipedia_trailing_qualifier_strippable():
     assert topic == "CI/CD in cloud computing"
     stripped = _TRAILING_QUALIFIER.sub("", topic).strip()
     assert stripped == "CI/CD"
+
+
+def test_wikitext_officeholder_field_cleaning():
+    # Real sample from the "Chief Minister of Tamil Nadu" infobox wikitext:
+    # | incumbent = [[C. Joseph Vijay]]  and  | incumbent_since = 10 May 2026
+    assert _clean_wikitext_value("[[C. Joseph Vijay]]") == "C. Joseph Vijay"
+    assert _clean_wikitext_value("[[Barack Obama|Obama]]") == "Barack Obama"
+    assert _clean_wikitext_value("10 May 2026") == "10 May 2026"
+    assert _clean_wikitext_value("[[Name]]<ref>some citation</ref>") == "Name"
 
 
 def test_citations_label_wikipedia_results_correctly():

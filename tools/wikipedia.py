@@ -14,6 +14,63 @@ HEADERS = {
     "User-Agent": "GroundedResearchAgent/1.0 (educational screening-assignment project)"
 }
 
+# Infobox field names that hold the current officeholder, in priority order
+# (different infobox templates use different field names — "Infobox official
+# post" uses 'incumbent', "Infobox officeholder" uses 'name'/'office'-style
+# fields, some use 'leader_name').
+_OFFICEHOLDER_FIELDS = ["incumbent", "leader_name", "office_holder"]
+_WIKILINK_PATTERN = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]*)?\]\]")
+
+
+def _clean_wikitext_value(raw: str) -> str:
+    """Strip basic wiki markup ([[link|display]] -> display, {{...}} templates
+    dropped, refs dropped) from a single infobox field value."""
+    value = re.sub(r"<ref[^>]*>.*?</ref>", "", raw, flags=re.DOTALL)
+    value = re.sub(r"<ref[^>]*/>", "", value)
+    value = re.sub(r"\{\{[^{}]*\}\}", "", value)
+    match = _WIKILINK_PATTERN.search(value)
+    if match:
+        return match.group(1).strip()
+    return value.strip()
+
+
+def _fetch_infobox_officeholder(title: str) -> Optional[Dict[str, str]]:
+    """Best-effort lookup of the current officeholder from the article's
+    infobox (e.g. 'incumbent' field), by fetching the lead section's raw
+    wikitext. Returns {'name': ..., 'since': ...} or None — never raises,
+    since this is a supplementary enrichment, not the primary retrieval.
+    """
+    try:
+        resp = requests.get(
+            API_URL,
+            params={"action": "parse", "page": title, "prop": "wikitext", "section": 0, "format": "json"},
+            headers=HEADERS,
+            timeout=10,
+        )
+        resp.raise_for_status()
+        wikitext = resp.json().get("parse", {}).get("wikitext", {}).get("*", "")
+    except Exception:
+        return None
+
+    if not wikitext:
+        return None
+
+    name = None
+    for field in _OFFICEHOLDER_FIELDS:
+        match = re.search(rf"\|\s*{field}\s*=\s*([^\n]+)", wikitext)
+        if match:
+            cleaned = _clean_wikitext_value(match.group(1))
+            if cleaned:
+                name = cleaned
+                break
+    if not name:
+        return None
+
+    since_match = re.search(r"\|\s*incumbent_since\s*=\s*([^\n|]+)", wikitext)
+    since = _clean_wikitext_value(since_match.group(1)) if since_match else None
+
+    return {"name": name, "since": since} if since else {"name": name}
+
 _BOILERPLATE_PATTERNS = [
     r"^what('s| is| are)\s+",
     r"^define\s+",
@@ -112,6 +169,14 @@ def get_wikipedia_summary(question: str) -> Dict[str, Any]:
         extract = data.get("extract")
         if not extract:
             return {"error": f"Wikipedia article '{title}' has no usable summary."}
+
+        officeholder = _fetch_infobox_officeholder(title)
+        if officeholder:
+            fact = f"The current officeholder listed on this page is {officeholder['name']}"
+            if officeholder.get("since"):
+                fact += f", in office since {officeholder['since']}"
+            extract = f"{fact}.\n\n{extract}"
+
         return {
             "topic": data.get("title", title),
             "description": data.get("description", ""),
